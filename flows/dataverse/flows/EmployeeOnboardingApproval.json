@@ -1,0 +1,32 @@
+{
+  "name": "EmployeeOnboardingApproval",
+  "trigger": "Dataverse: When a row is added (Employees)",
+  "inputs": { "table": "Employees" },
+  "steps": [
+    { "action": "Get Manager", "connector": "Office365Users", "inputs": { "email": "@{triggerBody()?['ManagerEmail']}" } },
+    { "action": "Start and wait for an approval", "connector": "Approvals",
+      "inputs": {
+        "approvalType": "Approve/Reject – First to respond",
+        "title": "New Hire Approval: @{triggerBody()?['Name']}",
+        "assignedTo": "@{triggerBody()?['ManagerEmail']}",
+        "details": "Department: @{triggerBody()?['Department']}<br/>Start Date: @{triggerBody()?['StartDate']}"
+      }
+    },
+    { "condition": "If outcome == Approved" },
+    { "true": [
+        { "action": "Update row", "connector": "Dataverse",
+          "inputs": { "table": "Employees", "id": "@{triggerBody()?['EmployeeID']}", "Status": "Approved" } },
+        { "action": "Post message", "connector": "Teams",
+          "inputs": { "team": "HR", "channel": "Onboarding",
+            "message": "✅ **@{triggerBody()?['Name']}** approved for onboarding." } }
+      ],
+      "false": [
+        { "action": "Update row", "connector": "Dataverse",
+          "inputs": { "table": "Employees", "id": "@{triggerBody()?['EmployeeID']}", "Status": "Rejected" } },
+        { "action": "Send an email (V2)", "connector": "Outlook",
+          "inputs": { "to": "@{triggerBody()?['Email']}", "subject": "Onboarding Decision",
+            "body": "Hi @{triggerBody()?['Name']}, your onboarding request was not approved at this time." } }
+      ]
+    }
+  ]
+}
